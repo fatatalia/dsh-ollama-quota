@@ -1,0 +1,5 @@
+# dsh-ollama-quota bundle patch
+# 插入 host 插件行：侧边栏 Ollama 配额进度条（RPC → ollama.com/api/usage）。
+- insert:
+    - id: dsh-ollama-quota
+      name: dsh-ollama-quota

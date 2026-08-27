@@ -1,0 +1,33 @@
+{
+  "name": "dsh-ollama-quota",
+  "version": "0.1.0",
+  "private": true,
+  "description": "dsh 侧边栏 Ollama 云配额进度展示：会话/每周用量百分比进度条（sidebar.footer.action 槽位，设置上方），会话结束自动刷新（含心跳/webhook 会话）。",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
+  }
+}
