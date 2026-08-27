@@ -20,7 +20,7 @@
 
 - **会话进度条**：5 小时滚动窗口用量 % + 重置倒计时
 - **每周进度条**：7 天滚动窗口用量 % + 重置倒计时
-- **颜色**：<60% 品牌蓝，60-80% 橙，>80% 红
+- **颜色**：<60% 蓝 `#4f8cff`，60-80% 橙 `#f5a524`，>80% 红 `#e5484d`（固定色值，不依赖主题变量）
 - **手工刷新**：标题右侧 ↻ 按钮，force 绕过缓存直接调 API
 - **收起模式**：侧边栏 rail 时只显示状态圆点（按每周用量着色）
 
@@ -46,6 +46,7 @@ dsh-ollama-quota/
 ## 技术要点（踩过的坑）
 
 - **`sidebar.footer.action` 容器是 `display:flex`**——组件必须 `flex:1 + minWidth:0 + width:100%` 才撑满侧边栏，否则进度条轨道被压成 0 宽（表现为"没占满、没进度条"）
+- **别用 `--dsw-alias-brand-primary` 做填充色**——它链式引用 `--dsh-boot-brand`，暗色主题下解析为近黑 `#0f1115`，进度条会变黑；且变量"存在"时 fallback 不生效。固定色值最稳
 - **client.js 改动刷新页面即生效**（动态 serve `/plugins/<id>/client.js`）；**host 端 index.js 改动需重启**：`launchctl kickstart -k system/com.dsh.web`
 - **usage 按 token 算不按次数算**：长会话上下文大，每次调用消耗多；"晚上消耗快"是使用集中 + 滚动窗口 + 长上下文的叠加，非服务端问题
 - **验证**：`bash ~/.dsh/scripts/verify-plugin.sh dsh-ollama-quota`（最小 profile 起实例验证插件树）
