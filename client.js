@@ -27,12 +27,14 @@ window.__ModuleLoader__.load({
       document.head.appendChild(tag);
     }
 
-    // 用量颜色：<60% 品牌蓝，60-80% 橙，>80% 红
+    // 用量颜色：<60% 蓝，60-80% 橙，>80% 红。
+    // 不用 --dsw-alias-brand-primary：它链式引用 --dsh-boot-brand，
+    // 暗色主题下解析为 #0f1115（近黑），进度条会变黑。固定色值最稳。
     function pctColor(pct) {
       if (pct == null) return "var(--dsw-alias-border-l2, rgba(128,128,128,.3))";
       if (pct >= 80) return "#e5484d";
       if (pct >= 60) return "#f5a524";
-      return "var(--dsw-alias-brand-primary, #4f8cff)";
+      return "#4f8cff";
     }
 
     function Bar({ label, pct, reset }) {
