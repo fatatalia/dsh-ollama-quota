@@ -80,10 +80,17 @@ function resetInfo(now = Date.now()) {
 
 export function apply(ctx) {
   const Logger = ctx.logger;
+  // 本地时间戳（时区跟随系统，Asia/Shanghai +08）。dsh 无自动加时间的 logger，
+  // 惯例是插件自己格式化（同 dsh-imessage 的 ts() 模式）。
+  const ts = () => {
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  };
   const log = {
-    info: (m) => { console.log(`[oq] ${m}`); try { Logger?.info?.(m); } catch {} },
-    warn: (m) => { console.warn(`[oq:warn] ${m}`); try { Logger?.warn?.(m); } catch {} },
-    error: (m) => { console.error(`[oq:err] ${m}`); try { Logger?.error?.(m); } catch {} },
+    info: (m) => { console.log(`[${ts()}] [oq] ${m}`); try { Logger?.info?.(m); } catch {} },
+    warn: (m) => { console.warn(`[${ts()}] [oq:warn] ${m}`); try { Logger?.warn?.(m); } catch {} },
+    error: (m) => { console.error(`[${ts()}] [oq:err] ${m}`); try { Logger?.error?.(m); } catch {} },
   };
 
   const apiKey = loadApiKey();
