@@ -78,6 +78,9 @@ window.__ModuleLoader__.load({
       const [data, setData] = React.useState(null);
       const [error, setError] = React.useState("");
       const [busy, setBusy] = React.useState(false);
+      // 历史趋势：展开状态 + 按天聚合数据
+      const [histOpen, setHistOpen] = React.useState(false);
+      const [histRows, setHistRows] = React.useState(null);
       // 本地倒计时 tick：每 30 秒重算剩余时间（基于 host 返回的 resetAt，不重新调 RPC）。
       const [, setTick] = React.useState(0);
 
@@ -124,6 +127,25 @@ window.__ModuleLoader__.load({
         }
       };
 
+      // 拉历史趋势（近 7 天按天聚合），展开/收起。
+      const toggleHistory = async () => {
+        if (histOpen) {
+          setHistOpen(false);
+          return;
+        }
+        setHistOpen(true);
+        if (histRows) return; // 已有数据直接展开
+        try {
+          const response = await rpc.call(CHANNEL, "history", { days: 7 });
+          if (!response || !response.ok) throw new Error(response?.error?.message || "history failed");
+          setHistRows(response.value?.rows || []);
+          setError("");
+        } catch (e) {
+          setError(e instanceof Error ? e.message : String(e));
+          setHistOpen(false);
+        }
+      };
+
       // 收起（rail）模式：只显示状态圆点（按每周用量着色）。
       if (!wide) {
         const dotColor = pctColor(data?.weeklyPct);
@@ -150,23 +172,41 @@ window.__ModuleLoader__.load({
             style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 },
             children: [
               S.jsx("span", { style: { fontSize: 11, fontWeight: 600, color: "var(--dsw-alias-label-tertiary)", letterSpacing: ".02em" }, children: "Ollama 配额" }),
-              S.jsx("button", {
-                type: "button",
-                onClick: manualRefresh,
-                title: "刷新配额",
-                style: {
-                  border: "none",
-                  background: "transparent",
-                  color: "var(--dsw-alias-label-tertiary)",
-                  cursor: "pointer",
-                  fontSize: 12,
-                  lineHeight: 1,
-                  padding: "1px 3px",
-                  opacity: busy ? 1 : 0.65,
-                  animation: busy ? "oq-spin 1s linear infinite" : undefined,
-                },
-                children: "↻",
-              }),
+              S.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 4 }, children: [
+                S.jsx("button", {
+                  type: "button",
+                  onClick: toggleHistory,
+                  title: histOpen ? "收起历史趋势" : "近 7 天配额趋势",
+                  style: {
+                    border: "none",
+                    background: "transparent",
+                    color: histOpen ? "var(--dsw-alias-label-primary, #fff)" : "var(--dsw-alias-label-tertiary)",
+                    cursor: "pointer",
+                    fontSize: 11,
+                    lineHeight: 1,
+                    padding: "1px 3px",
+                    opacity: 0.85,
+                  },
+                  children: "📈",
+                }),
+                S.jsx("button", {
+                  type: "button",
+                  onClick: manualRefresh,
+                  title: "刷新配额",
+                  style: {
+                    border: "none",
+                    background: "transparent",
+                    color: "var(--dsw-alias-label-tertiary)",
+                    cursor: "pointer",
+                    fontSize: 12,
+                    lineHeight: 1,
+                    padding: "1px 3px",
+                    opacity: busy ? 1 : 0.65,
+                    animation: busy ? "oq-spin 1s linear infinite" : undefined,
+                  },
+                  children: "↻",
+                }),
+              ]}),
             ],
           }),
           S.jsx(Bar, {
@@ -179,6 +219,58 @@ window.__ModuleLoader__.load({
             pct: data?.weeklyPct ?? null,
             reset: fmtDuration(data ? (new Date(data.weeklyResetAt).getTime() - Date.now()) / 1000 : null),
           }),
+          // 历史趋势表格（近 7 天，每天日终值 + 相对前一日增量 + 周请求数）
+          histOpen
+            ? S.jsx("div", {
+                style: {
+                  marginTop: 6,
+                  borderTop: "1px solid var(--dsw-alias-border-l1, rgba(128,128,128,.12))",
+                  paddingTop: 5,
+                  fontSize: 10,
+                  color: "var(--dsw-alias-label-tertiary)",
+                },
+                children: histRows && histRows.length
+                  ? S.jsxs("div", {
+                      children: [
+                        S.jsxs("div", {
+                          style: { display: "flex", gap: 6, marginBottom: 2, fontWeight: 600, color: "var(--dsw-alias-label-secondary)" },
+                          children: [
+                            S.jsx("span", { style: { width: 34, flex: "none" }, children: "日期" }),
+                            S.jsx("span", { style: { width: 42, textAlign: "right" }, children: "每周" }),
+                            S.jsx("span", { style: { width: 32, textAlign: "right" }, children: "Δ" }),
+                            S.jsx("span", { style: { flex: 1, textAlign: "right" }, children: "请求" }),
+                          ],
+                        }),
+                        ...histRows.map((r, i) => {
+                          const prev = i > 0 ? histRows[i - 1].weeklyPct : null;
+                          const delta = prev != null && r.weeklyPct != null ? r.weeklyPct - prev : null;
+                          const dot = pctColor(r.weeklyPct);
+                          return S.jsxs("div", {
+                            key: r.date,
+                            style: { display: "flex", gap: 6, alignItems: "center", marginBottom: 1 },
+                            children: [
+                              S.jsxs("span", { style: { width: 34, flex: "none" }, children: [
+                                S.jsx("span", { style: { display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: dot, marginRight: 4, verticalAlign: 1 } }),
+                                r.date.slice(5),
+                              ]}),
+                              S.jsx("span", { style: { width: 42, textAlign: "right" }, children: r.weeklyPct == null ? "—" : `${r.weeklyPct}%` }),
+                              S.jsx("span", {
+                                style: {
+                                  width: 32,
+                                  textAlign: "right",
+                                  color: delta == null ? "var(--dsw-alias-label-tertiary)" : delta >= 0 ? "#e5484d" : "#4f8cff",
+                                },
+                                children: delta == null ? "—" : `+${delta}`,
+                              }),
+                              S.jsx("span", { style: { flex: 1, textAlign: "right" }, children: r.weeklyReqs == null ? "—" : String(r.weeklyReqs) }),
+                            ],
+                          });
+                        }),
+                      ],
+                    })
+                  : S.jsx("div", { children: "暂无历史数据（重启后开始记录）" }),
+              })
+            : null,
           error
             ? S.jsx("div", { style: { fontSize: 10, color: "var(--dsw-alias-label-tertiary)", marginTop: 2 }, children: "配额数据不可用" })
             : null,

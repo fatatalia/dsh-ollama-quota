@@ -10,7 +10,7 @@
  */
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, renameSync } from "node:fs";
 
 export const name = "dsh-ollama-quota";
 
@@ -19,6 +19,102 @@ export const inject = ["connection"];
 const USAGE_URL = "https://ollama.com/api/usage";
 const CACHE_TTL_MS = 5 * 60 * 1000; // 缓存 5 分钟
 const REFRESH_COOLDOWN_MS = 30 * 1000; // 会话事件节流 30 秒
+const HISTORY_MAX_SAMPLES = 20000; // 历史采样上限（约 2MB JSON），超出截掉最老一半
+
+/** 插件运行时数据目录：与凭据同源（DSH_HOME，缺省 ~/.dsh）。 */
+function dataDir() {
+  return process.env.DSH_HOME || join(homedir(), ".dsh");
+}
+const historyFile = () => join(dataDir(), "ollama-quota-history.json");
+
+/** Ollama 每周窗口锚点：1970-01-05（周一）00:00 UTC → 每周一 00:00 UTC 重置（北京周一 08:00）。 */
+const WEEK_ANCHOR_MS = 345600000;
+
+/** 采样所属周窗口的 UTC 周一起始时刻（ms）。 */
+function weekStartMs(t) {
+  return WEEK_ANCHOR_MS + Math.floor((t - WEEK_ANCHOR_MS) / 604800000) * 604800000;
+}
+
+/** 读历史快照文件；不存在/损坏返回空列表。 */
+function loadHistory() {
+  try {
+    const text = readFileSync(historyFile(), "utf8");
+    const o = JSON.parse(text);
+    if (o && Array.isArray(o.samples)) return o.samples;
+  } catch {
+    /* 文件不存在或解析失败：按空历史处理 */
+  }
+  return [];
+}
+
+/**
+ * 记录一条配额采样（真实 API 查询成功后调用）。
+ * 去重：与最后一条采样同日且百分比完全相同 → 跳过（值没变，不刷历史）。
+ * 原子写：tmp + rename，避免进程中断写坏文件。
+ */
+function recordSample(data) {
+  const now = Date.now();
+  const bj = new Date(now + 8 * 3600 * 1000);
+  const bjDate = bj.toISOString().slice(0, 10); // 北京日期 YYYY-MM-DD
+  const sample = {
+    t: now,
+    date: bjDate,
+    week: new Date(weekStartMs(now)).toISOString().slice(0, 10), // 周窗口 UTC 周一日期
+    sessionPct: data.sessionPct,
+    weeklyPct: data.weeklyPct,
+    sessionReqs: data.sessionReqs ?? null,
+    weeklyReqs: data.weeklyReqs ?? null,
+  };
+  try {
+    const samples = loadHistory();
+    const last = samples[samples.length - 1];
+    if (
+      last &&
+      last.date === bjDate &&
+      last.weeklyPct === sample.weeklyPct &&
+      last.sessionPct === sample.sessionPct
+    ) {
+      return; // 同日同值，无新信息
+    }
+    samples.push(sample);
+    if (samples.length > HISTORY_MAX_SAMPLES) {
+      samples.splice(0, samples.length - HISTORY_MAX_SAMPLES); // 保最新，截掉最老
+    }
+    const tmp = historyFile() + ".tmp";
+    writeFileSync(tmp, JSON.stringify({ version: 1, samples }, null, 0) + "\n");
+    renameSync(tmp, historyFile());
+  } catch (e) {
+    // 落盘失败不影响主流程（侧边栏配额照常展示），只记日志
+    console.error(`[oq:warn] 历史快照落盘失败: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
+/**
+ * 历史按天聚合：每天取当天最后一条采样（日终值），按日期升序。
+ * @param days 返回最近 N 天（北京日期），默认 7
+ */
+function historyByDay(days = 7) {
+  const samples = loadHistory();
+  const byDay = new Map();
+  for (const s of samples) {
+    byDay.set(s.date, s); // 文件按时间追加，后面的覆盖 = 当天最后一条
+  }
+  const now = Date.now();
+  const bjNow = new Date(now + 8 * 3600 * 1000);
+  const today = bjNow.toISOString().slice(0, 10);
+  const cutoff = new Date(bjNow.getTime() - (days - 1) * 86400000).toISOString().slice(0, 10);
+  return [...byDay.entries()]
+    .filter(([d]) => d >= cutoff && d <= today)
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([date, s]) => ({
+      date,
+      week: s.week,
+      sessionPct: s.sessionPct,
+      weeklyPct: s.weeklyPct,
+      sessionReqs: s.sessionReqs,
+      weeklyReqs: s.weeklyReqs,
+    }));
+}
 
 /** 读取 API key：环境变量优先，其次 DSH_HOME/.credentials.yaml。 */
 function loadApiKey() {
@@ -52,9 +148,13 @@ async function fetchQuota(apiKey) {
   const limits = data?.limits || {};
   const session = limits.session || {};
   const weekly = limits.weekly || {};
+  // 请求数：models 数组各模型 request_count 汇总（按模型计数）
+  const sumReqs = (m) => (Array.isArray(m?.models) ? m.models.reduce((acc, x) => acc + (x.request_count || 0), 0) : null);
   return {
     sessionPct: toPct(session.usage),
     weeklyPct: toPct(weekly.usage),
+    sessionReqs: sumReqs(session),
+    weeklyReqs: sumReqs(weekly),
     fetchedAt: new Date().toISOString(),
   };
 }
@@ -119,6 +219,7 @@ export function apply(ctx) {
         const data = await fetchQuota(apiKey);
         cache = { data, at: Date.now() };
         log.info(`配额已刷新：会话 ${data.sessionPct}% / 每周 ${data.weeklyPct}%`);
+        recordSample(data); // 真实查询成功 → 落盘快照
         return data;
       } catch (e) {
         log.error(`配额刷新失败：${e instanceof Error ? e.message : String(e)}`);
@@ -141,6 +242,11 @@ export function apply(ctx) {
           if (!value) return { ok: true, value: null };
           // 用量走缓存，重置时间每次 RPC 实时计算（不缓存，避免过期）。
           return { ok: true, value: { ...value, ...resetInfo() } };
+        }
+        case "history": {
+          // 历史趋势：按天聚合（每天最后一条采样），默认近 7 天
+          const days = Number.isFinite(payload?.days) ? Math.min(Math.max(1, Math.trunc(payload.days)), 90) : 7;
+          return { ok: true, value: { days, rows: historyByDay(days) } };
         }
         default:
           throw new Error(`unknown endpoint: ${endpoint}`);
