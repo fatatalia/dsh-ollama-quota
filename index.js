@@ -14,7 +14,7 @@ import { readFileSync, writeFileSync, renameSync } from "node:fs";
 
 export const name = "dsh-ollama-quota";
 
-export const inject = ["connection"];
+export const inject = ["connection", "webServer"];
 
 const USAGE_URL = "https://ollama.com/api/usage";
 const CACHE_TTL_MS = 5 * 60 * 1000; // 缓存 5 分钟

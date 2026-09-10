@@ -64,4 +64,5 @@ dsh-ollama-quota/
 - **别用 `--dsw-alias-brand-primary` 做填充色**——它链式引用 `--dsh-boot-brand`，暗色主题下解析为近黑 `#0f1115`，进度条会变黑；且变量"存在"时 fallback 不生效。固定色值最稳
 - **client.js 改动刷新页面即生效**（动态 serve `/plugins/<id>/client.js`）；**host 端 index.js 改动需重启**：`launchctl kickstart -k system/com.dsh.web`
 - **usage 按 token 算不按次数算**：长会话上下文大，每次调用消耗多；"晚上消耗快"是使用集中 + 滚动窗口 + 长上下文的叠加，非服务端问题
+- **inject 需含 `"webServer"`**（dsh 0.1.5 起严格检查）：漏了报 `cannot get property "webServer" without inject`，插件加载失败（2026-09-10 踩过）
 - **验证**：`bash ~/.dsh/scripts/verify-plugin.sh dsh-ollama-quota`（最小 profile 起实例验证插件树）
