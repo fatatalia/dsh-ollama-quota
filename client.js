@@ -235,7 +235,7 @@ window.__ModuleLoader__.load({
                         S.jsxs("div", {
                           style: { display: "flex", gap: 6, marginBottom: 2, fontWeight: 600, color: "var(--dsw-alias-label-secondary)" },
                           children: [
-                            S.jsx("span", { style: { width: 34, flex: "none" }, children: "日期" }),
+                            S.jsx("span", { style: { width: 46, flex: "none", whiteSpace: "nowrap" }, children: "日期" }),
                             S.jsx("span", { style: { width: 42, textAlign: "right" }, children: "每周" }),
                             S.jsx("span", { style: { width: 32, textAlign: "right" }, children: "Δ" }),
                             S.jsx("span", { style: { flex: 1, textAlign: "right" }, children: "请求" }),
@@ -243,13 +243,15 @@ window.__ModuleLoader__.load({
                         }),
                         ...histRows.map((r, i) => {
                           const prev = i > 0 ? histRows[i - 1].weeklyPct : null;
-                          const delta = prev != null && r.weeklyPct != null ? r.weeklyPct - prev : null;
+                          const diff = prev != null && r.weeklyPct != null ? r.weeklyPct - prev : null;
+                          // 两个一位小数相减会带出 1.9000000000000004 这类浮点尾数，统一舍入到 1 位小数
+                          const delta = diff == null ? null : Math.round(diff * 10) / 10;
                           const dot = pctColor(r.weeklyPct);
                           return S.jsxs("div", {
                             key: r.date,
                             style: { display: "flex", gap: 6, alignItems: "center", marginBottom: 1 },
                             children: [
-                              S.jsxs("span", { style: { width: 34, flex: "none" }, children: [
+                              S.jsxs("span", { style: { width: 46, flex: "none", whiteSpace: "nowrap" }, children: [
                                 S.jsx("span", { style: { display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: dot, marginRight: 4, verticalAlign: 1 } }),
                                 r.date.slice(5),
                               ]}),
@@ -260,7 +262,7 @@ window.__ModuleLoader__.load({
                                   textAlign: "right",
                                   color: delta == null ? "var(--dsw-alias-label-tertiary)" : delta >= 0 ? "#e5484d" : "#4f8cff",
                                 },
-                                children: delta == null ? "—" : `+${delta}`,
+                                children: delta == null ? "—" : `${delta > 0 ? "+" : ""}${delta}`,
                               }),
                               S.jsx("span", { style: { flex: 1, textAlign: "right" }, children: r.weeklyReqs == null ? "—" : String(r.weeklyReqs) }),
                             ],
