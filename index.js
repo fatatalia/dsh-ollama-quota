@@ -103,17 +103,40 @@ function historyByDay(days = 7) {
   const bjNow = new Date(now + 8 * 3600 * 1000);
   const today = bjNow.toISOString().slice(0, 10);
   const cutoff = new Date(bjNow.getTime() - (days - 1) * 86400000).toISOString().slice(0, 10);
-  return [...byDay.entries()]
-    .filter(([d]) => d >= cutoff && d <= today)
-    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
-    .map(([date, s]) => ({
-      date,
-      week: s.week,
-      sessionPct: s.sessionPct,
-      weeklyPct: s.weeklyPct,
-      sessionReqs: s.sessionReqs,
-      weeklyReqs: s.weeklyReqs,
-    }));
+
+  // 先按日期升序排"全量"（不先过滤窗口）：算日请求数要用到窗口外的前一天做差分，
+  // 否则窗口首日会因为拿不到前一天而算不出来。
+  const all = [...byDay.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
+
+  return all
+    .map(([date, s], i) => ({ date, s, prev: i > 0 ? all[i - 1][1] : null }))
+    .filter(({ date }) => date >= cutoff && date <= today)
+    .map(({ date, s, prev }) => {
+      // 「当天请求数」= 本周累计请求数的日差分。
+      // Ollama API 只有窗口累计，没有"天"这个维度，所以只能靠相邻两天日终值相减还原。
+      // ⚠️ 周窗口重置日（每周一 08:00 北京时间）计数归零，差分会是负数 ——
+      //    此时日终值本身就是当天全部请求数，直接取用，不做差分。
+      let reqsOfDay = null;
+      if (s.weeklyReqs != null) {
+        const weekReset =
+          !prev ||
+          prev.week !== s.week ||
+          prev.weeklyReqs == null ||
+          s.weeklyReqs < prev.weeklyReqs; // 兜底：累计值倒退 = 一定重置过
+        reqsOfDay = weekReset ? s.weeklyReqs : s.weeklyReqs - prev.weeklyReqs;
+      }
+      return {
+        date,
+        week: s.week,
+        sessionPct: s.sessionPct,
+        weeklyPct: s.weeklyPct,
+        sessionReqs: s.sessionReqs,
+        weeklyReqs: s.weeklyReqs,
+        reqsOfDay, // 当天请求数（差分还原）
+        weekReset: s.weeklyReqs != null && prev != null && s.weeklyReqs < prev.weeklyReqs,
+        partial: date === today, // 今天还没过完，请求数是不完整的
+      };
+    });
 }
 
 /** 读取 API key：环境变量优先，其次 DSH_HOME/.credentials.yaml。 */

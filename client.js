@@ -233,12 +233,13 @@ window.__ModuleLoader__.load({
                   ? S.jsxs("div", {
                       children: [
                         S.jsxs("div", {
-                          style: { display: "flex", gap: 6, marginBottom: 2, fontWeight: 600, color: "var(--dsw-alias-label-secondary)" },
+                          style: { display: "flex", gap: 4, marginBottom: 2, fontWeight: 600, color: "var(--dsw-alias-label-secondary)" },
                           children: [
-                            S.jsx("span", { style: { width: 46, flex: "none", whiteSpace: "nowrap" }, children: "日期" }),
-                            S.jsx("span", { style: { width: 42, textAlign: "right" }, children: "每周" }),
-                            S.jsx("span", { style: { width: 32, textAlign: "right" }, children: "Δ" }),
-                            S.jsx("span", { style: { flex: 1, textAlign: "right" }, children: "请求" }),
+                            S.jsx("span", { style: { width: 38, flex: "none", whiteSpace: "nowrap" }, children: "日期" }),
+                            S.jsx("span", { style: { width: 36, textAlign: "right" }, children: "每周" }),
+                            S.jsx("span", { style: { width: 26, textAlign: "right" }, children: "Δ" }),
+                            S.jsx("span", { style: { width: 38, textAlign: "right" }, children: "当日" }),
+                            S.jsx("span", { style: { flex: 1, textAlign: "right" }, children: "累计" }),
                           ],
                         }),
                         ...histRows.map((r, i) => {
@@ -249,24 +250,41 @@ window.__ModuleLoader__.load({
                           const dot = pctColor(r.weeklyPct);
                           return S.jsxs("div", {
                             key: r.date,
-                            style: { display: "flex", gap: 6, alignItems: "center", marginBottom: 1 },
+                            style: { display: "flex", gap: 4, alignItems: "center", marginBottom: 1 },
                             children: [
-                              S.jsxs("span", { style: { width: 46, flex: "none", whiteSpace: "nowrap" }, children: [
+                              S.jsxs("span", { style: { width: 38, flex: "none", whiteSpace: "nowrap" }, children: [
                                 S.jsx("span", { style: { display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: dot, marginRight: 4, verticalAlign: 1 } }),
                                 r.date.slice(5),
                               ]}),
-                              S.jsx("span", { style: { width: 42, textAlign: "right" }, children: r.weeklyPct == null ? "—" : `${r.weeklyPct}%` }),
+                              S.jsx("span", { style: { width: 36, textAlign: "right" }, children: r.weeklyPct == null ? "—" : `${r.weeklyPct}%` }),
                               S.jsx("span", {
                                 style: {
-                                  width: 32,
+                                  width: 26,
                                   textAlign: "right",
                                   color: delta == null ? "var(--dsw-alias-label-tertiary)" : delta >= 0 ? "#e5484d" : "#4f8cff",
                                 },
                                 children: delta == null ? "—" : `${delta > 0 ? "+" : ""}${delta}`,
                               }),
-                              S.jsx("span", { style: { flex: 1, textAlign: "right" }, children: r.weeklyReqs == null ? "—" : String(r.weeklyReqs) }),
+                              // 当天请求数：由累计值差分还原（host 端 reqsOfDay）。
+                              // 带 * = 今天还没过完，数字不完整。
+                              S.jsx("span", {
+                                style: {
+                                  width: 38,
+                                  textAlign: "right",
+                                  color: r.partial ? "var(--dsw-alias-label-tertiary)" : "var(--dsw-alias-label-secondary)",
+                                },
+                                children: r.reqsOfDay == null ? "—" : `${r.reqsOfDay}${r.partial ? "*" : ""}`,
+                              }),
+                              S.jsx("span", {
+                                style: { flex: 1, textAlign: "right", color: "var(--dsw-alias-label-tertiary)" },
+                                children: r.weeklyReqs == null ? "—" : String(r.weeklyReqs),
+                              }),
                             ],
                           });
+                        }),
+                        S.jsx("div", {
+                          style: { marginTop: 3, fontSize: 9, lineHeight: 1.3, color: "var(--dsw-alias-label-tertiary)", opacity: 0.75 },
+                          children: "* 今天未完 · 当日 = 相邻两天累计之差",
                         }),
                       ],
                     })
