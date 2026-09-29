@@ -54,9 +54,24 @@ client 端基于 host 返回的 `resetAt` 本地每 30 秒 tick 倒计时，不�
 dsh-ollama-quota/
 ├── index.js              # host 插件：API key 加载 + 缓存 + RPC（/dsh-ollama-quota）
 ├── client.js             # 浏览器 bundle：sidebar.footer.action 进度条
+├── docs/
+│   └── daily-allowance-idea.md   # 「每日可用量」想法存档（2026-09-29 暂缓，未实现）
 ├── cordis.patch.yml
 └── package.json
 ```
+
+## 暂缓的想法（未实现）
+
+| 想法 | 状态 | 存档 |
+|---|---|---|
+| **「每日可用量」** —— 按每周剩余量算每天能用多少 | **2026-09-29 暂缓** | [docs/daily-allowance-idea.md](docs/daily-allowance-idea.md) |
+
+暂缓原因：均分预算**天然不准** —— 实测一周消费"前松后紧"
+（周一 2.1% → 周日 66.6%），所以"每天 N%"在周初毫无约束力、到周中突然报警。
+**它是平均参考线，不是硬上限**，做成告警必然误报。
+
+存档里保留了完整的需求、约束（Ollama **没有「天」维度**，按天数字全靠差分）、
+三种可选语义、四个待定项，以及最小实现路径 —— 将来想捡起来不必重推。
 
 ## 技术要点（踩过的坑）
 
